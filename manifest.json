@@ -1,8 +1,9 @@
 {
   "name": "Morning Warriors",
-  "short_name": "Warriors",
+  "short_name": "I+E",
   "description": "30-day morning workout challenge tracker",
-  "start_url": "/",
+  "start_url": "/morning-warriors/",
+  "scope": "/morning-warriors/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0F6E56",
