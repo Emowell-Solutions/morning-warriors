@@ -10,7 +10,7 @@
 <meta name="description" content="30-day morning workout challenge tracker">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css">
+
 <title>Morning Warriors</title>
 
 <style>
@@ -109,6 +109,7 @@ html, body {
   position: relative;
 }
 .nav-btn i { font-size: 24px; }
+.nav-btn svg { display: block; }
 .nav-btn.active { color: var(--mint); }
 .nav-dot {
   width: 4px;
@@ -134,8 +135,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #253D30;
-  color: #6DBF96;
+  background: var(--mint);
+  color: #fff;
   font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
@@ -143,21 +144,21 @@ html, body {
   margin-bottom: 10px;
 }
 .quote-card {
-  background: #1A2E25;
+  background: #fff;
   border-radius: 16px;
   padding: 14px;
   margin-bottom: 10px;
-  border: none;
+  border: 1px solid var(--border);
 }
 .quote-text {
   font-size: 15px;
   line-height: 1.7;
   font-style: italic;
   margin-bottom: 6px;
-  color: #E0EDE6;
+  color: var(--text);
 }
-.quote-meta { font-size: 12px; color: #6DBF96; }
-.quote-loading { font-size: 13px; color: #4A7A60; animation: pulse 1.4s infinite; }
+.quote-meta { font-size: 12px; color: var(--muted); }
+.quote-loading { font-size: 13px; color: var(--muted); animation: pulse 1.4s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
 /* ── Progress bar ── */
@@ -165,12 +166,12 @@ html, body {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #4A7A60;
+  color: var(--muted);
   margin-bottom: 5px;
   margin-top: 14px;
 }
-.prog-track { height: 7px; background: #253D30; border-radius: 4px; overflow: hidden; }
-.prog-fill { height: 100%; background: #6DBF96; border-radius: 4px; transition: width .6s ease; }
+.prog-track { height: 7px; background: var(--cream); border-radius: 4px; overflow: hidden; }
+.prog-fill { height: 100%; background: var(--mint); border-radius: 4px; transition: width .6s ease; }
 
 /* ── Section labels ── */
 .slabel {
@@ -490,9 +491,18 @@ html, body {
   </div>
 
   <nav class="bottom-nav">
-    <button class="nav-btn active" onclick="goTo(0)" id="nb0" aria-label="Home"><i class="ti ti-sun" aria-hidden="true"></i><div class="nav-dot"></div></button>
-    <button class="nav-btn" onclick="goTo(1)" id="nb1" aria-label="Calendar"><i class="ti ti-calendar-week" aria-hidden="true"></i><div class="nav-dot"></div></button>
-    <button class="nav-btn" onclick="goTo(2)" id="nb2" aria-label="Leaderboard"><i class="ti ti-medal" aria-hidden="true"></i><div class="nav-dot"></div></button>
+    <button class="nav-btn active" onclick="goTo(0)" id="nb0" aria-label="Home">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"/></svg>
+      <div class="nav-dot"></div>
+    </button>
+    <button class="nav-btn" onclick="goTo(1)" id="nb1" aria-label="Calendar">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/><rect x="8" y="15" width="2" height="2" rx="0.5" fill="currentColor" stroke="none"/><rect x="11" y="15" width="2" height="2" rx="0.5" fill="currentColor" stroke="none"/><rect x="14" y="15" width="2" height="2" rx="0.5" fill="currentColor" stroke="none"/></svg>
+      <div class="nav-dot"></div>
+    </button>
+    <button class="nav-btn" onclick="goTo(2)" id="nb2" aria-label="Leaderboard">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+      <div class="nav-dot"></div>
+    </button>
   </nav>
 </div>
 
