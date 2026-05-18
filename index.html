@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morning Warriors — 30-Day Challenge</title>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBA4EMgRh3csBOJ2ksqArJXD7GYc5W5qPk",
+    authDomain: "mood-root-vs-b4a65.firebaseapp.com",
+    projectId: "mood-root-vs-b4a65",
+    storageBucket: "mood-root-vs-b4a65.firebasestorage.app",
+    messagingSenderId: "486582981105",
+    appId: "1:486582981105:web:cd35367f6e811bd9ce7450"
+  };
+
+  const PROXY_URL = "https://getquote-zwi7itfwfq-oa.a.run.app";
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const START = new Date('2026-05-18');
+  const now = new Date();
+  const todayDay = Math.max(1, Math.min(30, Math.floor((now - START) / 86400000) + 1));
+  const EMOJIS = ['🔥','💪','⚡','🦁','🐯','🚀','🌟','🏆','🎯','🦅','🐺','🏋️','🤸','🧗','🦊','🐉','💥','🌊','🎽','🥊'];
+
+  let participants = [];
+  let workouts = [];
+  let selectedEmoji = '🔥';
+  let currentScreen = 0;
+
+  document.getElementById('dayLabel').textContent = `Day ${todayDay} of 30`;
+  document.getElementById('lDay').value = todayDay;
+
+  // ── Firestore listeners ──────────────────────────────────────────
+  onSnapshot(query(collection(db, 'participants'), orderBy('joinedAt')), snap => {
+    participants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderParticipants();
+    renderAll();
+  });
+
+  onSnapshot(query(collection(db, 'workouts'), orderBy('ts')), snap => {
+    workouts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  // ── Navigation ───────────────────────────────────────────────────
+  window.goTo = function(i) {
+    document.querySelectorAll('.screen').forEach((s, j) => s.classList.toggle('active', j === i));
+    document.querySelectorAll('.nav-btn').forEach((b, j) => b.classList.toggle('active', j === i));
+    currentScreen = i;
+    if (i === 1) renderCalendar();
+    if (i === 2) renderLeaderboard();
+  };
+
+  // ── Emoji picker ─────────────────────────────────────────────────
+  function buildEmojiGrid() {
+    document.getElementById('emojiGrid').innerHTML = EMOJIS.map(e =>
+      `<button class="ep-opt${e === selectedEmoji ? ' selected' : ''}" onclick="pickEmoji('${e}')">${e}</button>`
+    ).join('');
+  }
+
+  window.togglePicker = function() {
+    const p = document.getElementById('emojiPicker');
+    p.style.display = p.style.display === 'block' ? 'none' : 'block';
+    buildEmojiGrid();
+  };
+
+  window.pickEmoji = function(e) {
+    selectedEmoji = e;
+    document.getElementById('emojiBtn').textContent = e;
+    document.getElementById('emojiPicker').style.display = 'none';
+  };
+
+  // ── Participants ─────────────────────────────────────────────────
+  window.joinChallenge = async function() {
+    const inp = document.getElementById('nameInput');
+    const err = document.getElementById('joinErr');
+    const name = inp.value.trim();
+    err.textContent = '';
+    if (!name) { err.textContent = 'Please enter your name.'; return; }
+    if (participants.length >= 10) { err.textContent = 'Max 10 warriors reached!'; return; }
+    if (participants.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+      err.textContent = 'That name is already taken!'; return;
+    }
+    await addDoc(collection(db, 'participants'), { name, emoji: selectedEmoji, joinedAt: Date.now() });
+    inp.value = '';
+  };
+
+  window.removeP = async function(id, name) {
+    if (!confirm(`Remove ${name} from the challenge?`)) return;
+    await deleteDoc(doc(db, 'participants', id));
+    const wSnap = workouts.filter(w => w.name === name);
+    for (const w of wSnap) await deleteDoc(doc(db, 'workouts', w.id));
+  };
+
+  function renderParticipants() {
+    const wrap = document.getElementById('chipWrap');
+    const sel = document.getElementById('lName');
+    document.getElementById('cntBadge').textContent = `(${participants.length}/10)`;
+    if (!participants.length) {
+      wrap.innerHTML = '<div class="no-p">No warriors yet — be the first!</div>';
+      sel.innerHTML = '<option value="">— join first —</option>';
+      return;
+    }
+    wrap.innerHTML = participants.map(p =>
+      `<div class="p-chip"><span>${p.emoji}</span><span>${p.name}</span>
+       <button class="rem" onclick="removeP('${p.id}','${p.name.replace(/'/g,"\\'")}')">×</button></div>`
+    ).join('');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— who? —</option>' +
+      participants.map(p => `<option value="${p.name}"${p.name === prev ? ' selected' : ''}>${p.emoji} ${p.name}</option>`).join('');
+  }
+
+  // ── Log workout ──────────────────────────────────────────────────
+  window.logIt = async function() {
+    const name = document.getElementById('lName').value;
+    const day = parseInt(document.getElementById('lDay').value) || todayDay;
+    const calories = parseInt(document.getElementById('lCal').value) || 120;
+    if (!name) { alert('Pick your name!'); return; }
+    await addDoc(collection(db, 'workouts'), { name, day, calories, duration: 15, ts: Date.now() });
+    const btn = document.getElementById('logBtn');
+    btn.classList.add('ok');
+    btn.innerHTML = `<i class="ti ti-circle-check"></i> Day ${day} crossed off! 🔥`;
+    setTimeout(() => {
+      btn.classList.remove('ok');
+      btn.innerHTML = '<i class="ti ti-circle-check"></i> Log workout — cross off the day';
+    }, 2500);
+  };
+
+  // ── Data helpers ─────────────────────────────────────────────────
+  function getMap() {
+    const m = {};
+    participants.forEach(p => { m[p.name] = {}; });
+    workouts.forEach(w => {
+      if (!m[w.name]) m[w.name] = {};
+      if (!m[w.name][w.day]) m[w.name][w.day] = { cals: 0, mins: 0 };
+      m[w.name][w.day].cals += w.calories;
+      m[w.name][w.day].mins += w.duration || 15;
+    });
+    return m;
+  }
+
+  function gDone(map, d) { return participants.some(p => map[p.name] && map[p.name][d]); }
+  function gCals(map, d) { let c = 0; participants.forEach(p => { if (map[p.name] && map[p.name][d]) c += map[p.name][d].cals; }); return c; }
+  function gWho(map, d) { return participants.filter(p => map[p.name] && map[p.name][d]); }
+
+  function bestGroupStreak(map) {
+    let best = 0, cur = 0;
+    for (let d = 1; d <= 30; d++) { if (gDone(map, d)) { cur++; best = Math.max(best, cur); } else cur = 0; }
+    return best;
+  }
+
+  function personalStreak(days) {
+    let best = 0, cur = 0, current = 0;
+    for (let d = 1; d <= 30; d++) {
+      if (days[d]) { cur++; best = Math.max(best, cur); if (d <= todayDay) current = cur; }
+      else { if (d <= todayDay) current = 0; cur = 0; }
+    }
+    return { best, current };
+  }
+
+  // ── Render all (home screen stats) ──────────────────────────────
+  function renderAll() {
+    const map = getMap();
+    let done = 0, cal = 0;
+    for (let d = 1; d <= 30; d++) { if (gDone(map, d)) { done++; cal += gCals(map, d); } }
+    const pct = Math.round((done / 30) * 100);
+    document.getElementById('progFill').style.width = pct + '%';
+    document.getElementById('progPct').textContent = pct + '%';
+    if (currentScreen === 1) renderCalendar();
+    if (currentScreen === 2) renderLeaderboard();
+  }
+
+  // ── Calendar screen ──────────────────────────────────────────────
+  function renderCalendar() {
+    const map = getMap();
+    let done = 0, cal = 0;
+    for (let d = 1; d <= 30; d++) { if (gDone(map, d)) { done++; cal += gCals(map, d); } }
+    document.getElementById('csDone').textContent = done;
+    document.getElementById('csCal').textContent = cal.toLocaleString();
+    document.getElementById('csStreak').textContent = bestGroupStreak(map);
+    document.getElementById('csPct').textContent = Math.round((done / 30) * 100) + '%';
+
+    document.getElementById('calHead').innerHTML =
+      ['Wk1','Wk2','Wk3','Wk4','Wk5','Ex'].map(w => `<div class="cal-hcell">${w}</div>`).join('');
+
+    const body = document.getElementById('calBody');
+    body.innerHTML = '';
+    for (let d = 1; d <= 30; d++) {
+      const isDone = gDone(map, d);
+      const cals = gCals(map, d);
+      const who = gWho(map, d);
+      const isToday = d === todayDay;
+      const isFuture = d > todayDay;
+      const cell = document.createElement('div');
+      cell.className = 'dcell' + (isDone ? ' done' : '') + (isToday ? ' istoday' : '') + (isFuture && !isDone ? ' future' : '');
+      if (isDone) {
+        cell.innerHTML = `<div class="dnum">${d}</div><span class="d-check">✅</span>
+          <div class="d-cal">${cals} kcal</div>
+          <div class="d-emojis">${who.map(p => p.emoji).join('')}</div>`;
+      } else {
+        cell.innerHTML = `<div class="dnum">${d}</div><div class="d-dot"></div>`;
+      }
+      body.appendChild(cell);
+    }
+
+    // per-warrior streaks
+    const hdr = document.getElementById('ppDaysHeader');
+    hdr.innerHTML = '';
+    for (let d = 1; d <= 30; d++) {
+      const t = document.createElement('div');
+      t.className = 'pp-day-tick';
+      t.textContent = (d % 5 === 0) ? d : '';
+      hdr.appendChild(t);
+    }
+
+    const ppBody = document.getElementById('ppBody');
+    if (!participants.length) {
+      ppBody.innerHTML = '<div style="padding:1rem 1.25rem;font-size:12px;color:#888">Join the challenge to see your streaks here.</div>';
+      return;
+    }
+    ppBody.innerHTML = '';
+    participants.forEach(p => {
+      const days = map[p.name] || {};
+      const cnt = Object.keys(days).length;
+      const { best, current } = personalStreak(days);
+      let dots = '';
+      for (let d = 1; d <= 30; d++) {
+        const isDone = !!days[d];
+        const isToday = d === todayDay && !isDone;
+        const prev = !!days[d - 1], next = !!days[d + 1];
+        let cls = 'pp-dot';
+        if (isDone) {
+          cls += ' done';
+          if (prev && next) cls += ' streak-mid';
+          else if (prev && !next) cls += ' streak-end';
+          else if (!prev && next) cls += ' streak-start';
+        }
+        if (isToday) cls += ' tod';
+        dots += `<div class="${cls}" title="Day ${d}${isDone ? ' ✓' : ''}"></div>`;
+      }
+      const streakInfo = current >= 2
+        ? `<span class="streak-badge">🔥${current}</span>`
+        : (best >= 2 ? `<span class="streak-badge muted">best ${best}</span>` : '');
+      const row = document.createElement('div');
+      row.className = 'pp-row';
+      row.innerHTML = `
+        <div class="pp-who"><span class="em">${p.emoji}</span><span class="nm">${p.name}</span>${streakInfo}</div>
+        <div class="pp-dots">${dots}</div>
+        <div class="pp-cnt">${cnt}/30</div>`;
+      ppBody.appendChild(row);
+    });
+  }
+
+  // ── Leaderboard screen ───────────────────────────────────────────
+  function renderLeaderboard() {
+    const map = getMap();
+    const stats = participants.map(p => {
+      const days = map[p.name] || {};
+      let cals = 0, mins = 0;
+      Object.values(days).forEach(d => { cals += d.cals; mins += d.mins; });
+      return { p, cals, days: Object.keys(days).length, mins };
+    }).sort((a, b) => b.cals - a.cals);
+
+    let totalDone = 0, totalCal = 0;
+    for (let d = 1; d <= 30; d++) { if (gDone(map, d)) { totalDone++; totalCal += gCals(map, d); } }
+    document.getElementById('lbCount').textContent = participants.length;
+    document.getElementById('lbDone').textContent = totalDone;
+    document.getElementById('lbCal').textContent = totalCal.toLocaleString();
+    document.getElementById('lbLeader').textContent = stats.length ? stats[0].p.emoji : '—';
+
+    const medals = ['🥇','🥈','🥉'];
+    const lbBody = document.getElementById('lbBody');
+    if (!stats.length) {
+      lbBody.innerHTML = '<div style="padding:1.5rem;text-align:center;font-size:13px;color:#888">No warriors yet — join the challenge!</div>';
+      return;
+    }
+    lbBody.innerHTML = stats.map((s, i) => `
+      <div class="lb-row">
+        <div class="lb-rank">${medals[i] || i + 1}</div>
+        <div class="lb-name"><span style="font-size:18px">${s.p.emoji}</span>${s.p.name}
+          ${s.days >= 3 ? `<span class="streak-pill">🔥${s.days}d</span>` : ''}</div>
+        <div class="lb-cal">${s.cals.toLocaleString()}</div>
+        <div class="lb-days">${s.days}</div>
+        <div class="lb-min">${s.mins}</div>
+      </div>`).join('');
+  }
+
+  // ── Daily quote via proxy ────────────────────────────────────────
+  async function fetchQuote() {
+    const area = document.getElementById('quoteArea');
+    try {
+      const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][now.getDay()];
+      const res = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 160,
+          messages: [{
+            role: 'user',
+            content: `Write ONE punchy original motivational quote for a 30-day morning exercise challenge. Today is ${dow}, Day ${todayDay} of 30. Make it fun, energetic, specific to beating morning laziness. Under 25 words. Then on a new line: "— ${dow}, Day ${todayDay}/30". Output only the quote and attribution, nothing else.`
+          }]
+        })
+      });
+      const data = await res.json();
+      const txt = data.content?.find(b => b.type === 'text')?.text?.trim() || '';
+      if (txt) {
+        const lines = txt.split('\n').filter(Boolean);
+        area.innerHTML = `<div class="quote-text">"${lines[0].replace(/^["']|["']$/g, '')}"</div>
+          <div class="quote-meta">${lines[1] || ''}</div>`;
+      } else throw new Error();
+    } catch (e) {
+      area.innerHTML = `<div class="quote-text">"The alarm is just your launchpad. Hit snooze and you miss the mission."</div>
+        <div class="quote-meta">— Morning Warriors</div>`;
+    }
+  }
+
+  fetchQuote();
+</script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+
+  .container { max-width: 680px; margin: 0 auto; padding: 1rem; }
+
+  .nav { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 1.25rem; }
+  .nav-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px; border: 1px solid #ddd; border-radius: 12px; background: #fff; cursor: pointer; font-size: 11px; color: #888; font-weight: 500; transition: .15s; font-family: inherit; }
+  .nav-btn i { font-size: 18px; }
+  .nav-btn.active { background: #E1F5EE; color: #0F6E56; border-color: #5DCAA5; }
+
+  .screen { display: none; } .screen.active { display: block; }
+
+  .card { background: #fff; border: 1px solid #e8e8e4; border-radius: 14px; padding: 1.25rem; margin-bottom: 1rem; }
+
+  .day-badge { display: inline-flex; align-items: center; gap: 5px; background: #E1F5EE; color: #0F6E56; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+  .quote-text { font-size: 15px; line-height: 1.7; font-style: italic; margin-bottom: 6px; }
+  .quote-meta { font-size: 12px; color: #888; }
+  .quote-loading { font-size: 13px; color: #aaa; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .prog-header { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 4px; }
+  .prog-track { height: 6px; background: #f0f0ea; border-radius: 3px; overflow: hidden; }
+  .prog-fill { height: 100%; background: #1D9E75; border-radius: 3px; transition: width .6s ease; }
+
+  .slabel { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem; }
+
+  .join-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-bottom: 6px; }
+  .join-row input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fafaf8; font-size: 13px; font-family: inherit; }
+  .emoji-pick-btn { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fafaf8; font-size: 18px; cursor: pointer; line-height: 1; }
+  .join-btn { padding: 8px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fafaf8; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; font-family: inherit; transition: .15s; }
+  .join-btn:hover { background: #E1F5EE; color: #0F6E56; border-color: #5DCAA5; }
+  .err { font-size: 11px; color: #c0392b; min-height: 14px; margin-bottom: 4px; }
+
+  .emoji-picker { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 10px; margin-bottom: 8px; display: none; }
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ep-opt { font-size: 20px; cursor: pointer; padding: 5px 7px; border-radius: 8px; border: 1px solid transparent; background: none; }
+  .ep-opt:hover { background: #f5f5f0; }
+  .ep-opt.selected { border-color: #5DCAA5; background: #E1F5EE; }
+
+  .p-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .p-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px; border-radius: 20px; font-size: 12px; background: #f5f5f0; border: 1px solid #e8e8e4; }
+  .p-chip .rem { background: none; border: none; cursor: pointer; font-size: 14px; color: #aaa; line-height: 1; padding: 0; font-family: inherit; }
+  .p-chip .rem:hover { color: #c0392b; }
+  .no-p { font-size: 12px; color: #aaa; }
+
+  .log-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .04em; }
+  .field select, .field input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fafaf8; font-size: 13px; width: 100%; font-family: inherit; }
+  .log-btn { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fafaf8; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: .15s; }
+  .log-btn:hover { background: #E1F5EE; color: #0F6E56; border-color: #5DCAA5; }
+  .log-btn.ok { background: #E1F5EE; color: #0F6E56; border-color: #5DCAA5; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 1rem; }
+  .stat { background: #fff; border: 1px solid #e8e8e4; border-radius: 10px; padding: .75rem 1rem; }
+  .stat-l { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+  .stat-v { font-size: 20px; font-weight: 600; }
+
+  .cal-grid-wrap { border: 1px solid #e8e8e4; border-radius: 14px; overflow: hidden; margin-bottom: 1rem; }
+  .cal-head-row { display: grid; grid-template-columns: repeat(6,1fr); background: #fafaf8; border-bottom: 1px solid #e8e8e4; }
+  .cal-hcell { text-align: center; font-size: 10px; font-weight: 600; color: #aaa; padding: 5px 2px; }
+  .cal-body { display: grid; grid-template-columns: repeat(6,1fr); }
+  .dcell { border-right: 1px solid #e8e8e4; border-bottom: 1px solid #e8e8e4; min-height: 70px; padding: 5px; }
+  .dcell:nth-child(6n) { border-right: none; }
+  .dcell:nth-last-child(-n+6) { border-bottom: none; }
+  .dcell.done { background: #E1F5EE; }
+  .dcell.future { opacity: .38; }
+  .dcell.istoday:not(.done) { outline: 2px solid #1D9E75; outline-offset: -2px; }
+  .dnum { font-size: 10px; font-weight: 600; color: #aaa; }
+  .dcell.done .dnum { color: #085041; }
+  .dcell.istoday .dnum { color: #0F6E56; }
+  .d-check { font-size: 18px; display: block; text-align: center; margin-top: 2px; }
+  .d-cal { font-size: 9px; color: #0F6E56; text-align: center; }
+  .d-emojis { font-size: 10px; text-align: center; }
+  .d-dot { width: 5px; height: 5px; border-radius: 50%; background: #ddd; margin: 12px auto 0; }
+  .dcell.istoday:not(.done) .d-dot { background: #1D9E75; }
+
+  .pp-section { background: #fff; border: 1px solid #e8e8e4; border-radius: 14px; overflow: hidden; margin-bottom: 1rem; }
+  .pp-header { display: grid; grid-template-columns: 80px 1fr 36px; gap: 6px; align-items: center; padding: 6px 14px; background: #fafaf8; border-bottom: 1px solid #e8e8e4; }
+  .pp-header-label { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .04em; }
+  .pp-days-header { display: flex; gap: 2px; }
+  .pp-day-tick { width: 13px; height: 13px; flex-shrink: 0; font-size: 8px; color: #bbb; display: flex; align-items: center; justify-content: center; }
+  .pp-row { display: grid; grid-template-columns: 80px 1fr 36px; gap: 6px; align-items: center; padding: 8px 14px; border-bottom: 1px solid #e8e8e4; }
+  .pp-row:last-child { border-bottom: none; }
+  .pp-who { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; overflow: hidden; }
+  .pp-who .em { font-size: 16px; flex-shrink: 0; }
+  .pp-who .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pp-dots { display: flex; gap: 2px; }
+  .pp-dot { width: 13px; height: 13px; border-radius: 3px; background: #f0f0ea; border: 1px solid #e8e8e4; flex-shrink: 0; }
+  .pp-dot.done { background: #1D9E75; border-color: #0F6E56; }
+  .pp-dot.streak-start { border-radius: 3px 0 0 3px; }
+  .pp-dot.streak-mid { border-radius: 0; }
+  .pp-dot.streak-end { border-radius: 0 3px 3px 0; }
+  .pp-dot.tod { border-color: #0F6E56; }
+  .pp-cnt { font-size: 11px; color: #aaa; text-align: right; }
+  .streak-badge { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; background: #FAEEDA; color: #633806; padding: 1px 5px; border-radius: 20px; margin-left: 3px; }
+  .streak-badge.muted { background: #f0f0ea; color: #888; }
+
+  .lb-wrap { background: #fff; border: 1px solid #e8e8e4; border-radius: 14px; overflow: hidden; }
+  .lb-row { display: grid; grid-template-columns: 36px 1fr 72px 56px 52px; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #e8e8e4; font-size: 13px; }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-hrow { background: #fafaf8; font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .lb-rank { text-align: center; font-size: 15px; }
+  .lb-name { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .lb-cal { text-align: right; font-weight: 600; }
+  .lb-days, .lb-min { text-align: right; color: #888; }
+  .streak-pill { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; background: #FAEEDA; color: #633806; padding: 1px 6px; border-radius: 20px; }
+</style>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css">
+
+<div class="container">
+  <nav class="nav">
+    <button class="nav-btn active" onclick="goTo(0)" id="nb0"><i class="ti ti-home"></i>Home</button>
+    <button class="nav-btn" onclick="goTo(1)" id="nb1"><i class="ti ti-calendar"></i>Calendar</button>
+    <button class="nav-btn" onclick="goTo(2)" id="nb2"><i class="ti ti-trophy"></i>Leaderboard</button>
+  </nav>
+
+  <!-- SCREEN 0: HOME -->
+  <div class="screen active" id="s0">
+    <div class="card">
+      <div class="day-badge"><i class="ti ti-flame" style="font-size:12px"></i><span id="dayLabel">Day 1 of 30</span></div>
+      <div id="quoteArea" class="quote-loading">Loading today's spark...</div>
+      <div style="margin-top:14px">
+        <div class="prog-header"><span>Group progress</span><span id="progPct">0%</span></div>
+        <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="slabel"><i class="ti ti-users" style="font-size:13px;vertical-align:-1px;margin-right:3px"></i>Warriors <span id="cntBadge" style="font-weight:400;color:#bbb">(0/10)</span></div>
+      <div class="join-row">
+        <input type="text" id="nameInput" placeholder="Your name" maxlength="20" onkeydown="if(event.key==='Enter')joinChallenge()">
+        <button class="emoji-pick-btn" id="emojiBtn" onclick="togglePicker()" title="Pick your emoji">🔥</button>
+        <button class="join-btn" onclick="joinChallenge()"><i class="ti ti-plus" style="font-size:13px;vertical-align:-1px"></i> Join</button>
+      </div>
+      <div class="err" id="joinErr"></div>
+      <div class="emoji-picker" id="emojiPicker"><div class="emoji-grid" id="emojiGrid"></div></div>
+      <div class="p-chips" id="chipWrap"><div class="no-p">No warriors yet — be the first!</div></div>
+    </div>
+
+    <div class="card">
+      <div class="slabel"><i class="ti ti-bolt" style="font-size:13px;vertical-align:-1px;margin-right:3px"></i>Log today's workout</div>
+      <div class="log-fields">
+        <div class="field"><label>Warrior</label><select id="lName"><option value="">— who? —</option></select></div>
+        <div class="field"><label>Day #</label><input type="number" id="lDay" min="1" max="30" value="1"></div>
+        <div class="field"><label>Calories</label><input type="number" id="lCal" min="1" max="2000" value="120"></div>
+      </div>
+      <button class="log-btn" id="logBtn" onclick="logIt()"><i class="ti ti-circle-check" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>Log workout — cross off the day</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 1: CALENDAR -->
+  <div class="screen" id="s1">
+    <div class="stats-row">
+      <div class="stat"><div class="stat-l">Days done</div><div class="stat-v" id="csDone">0</div></div>
+      <div class="stat"><div class="stat-l">Total kcal</div><div class="stat-v" id="csCal">0</div></div>
+      <div class="stat"><div class="stat-l">Best streak</div><div class="stat-v" id="csStreak">0</div></div>
+      <div class="stat"><div class="stat-l">Complete</div><div class="stat-v" id="csPct">0%</div></div>
+    </div>
+    <div class="cal-grid-wrap">
+      <div class="cal-head-row" id="calHead"></div>
+      <div class="cal-body" id="calBody"></div>
+    </div>
+    <div class="slabel" style="margin-bottom:.5rem"><i class="ti ti-timeline" style="font-size:13px;vertical-align:-1px;margin-right:3px"></i>Per-warrior streaks</div>
+    <div class="pp-section">
+      <div class="pp-header">
+        <div class="pp-header-label">Warrior</div>
+        <div class="pp-days-header" id="ppDaysHeader"></div>
+        <div class="pp-header-label" style="text-align:right">Done</div>
+      </div>
+      <div id="ppBody"></div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: LEADERBOARD -->
+  <div class="screen" id="s2">
+    <div class="stats-row">
+      <div class="stat"><div class="stat-l">Warriors</div><div class="stat-v" id="lbCount">0</div></div>
+      <div class="stat"><div class="stat-l">Days done</div><div class="stat-v" id="lbDone">0</div></div>
+      <div class="stat"><div class="stat-l">Total kcal</div><div class="stat-v" id="lbCal">0</div></div>
+      <div class="stat"><div class="stat-l">Leader</div><div class="stat-v" id="lbLeader" style="font-size:22px">—</div></div>
+    </div>
+    <div class="lb-wrap">
+      <div class="lb-row lb-hrow">
+        <div></div><div>Warrior</div><div style="text-align:right">Calories</div><div style="text-align:right">Days</div><div style="text-align:right">Min</div>
+      </div>
+      <div id="lbBody"></div>
+    </div>
+  </div>
+</div>
